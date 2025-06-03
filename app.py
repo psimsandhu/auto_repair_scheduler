@@ -11,8 +11,8 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 APP_ROOT = os.path.dirname(__file__)
 BOOKING_FILE = os.path.join(APP_ROOT, "bookings.csv")
 SCHEDULE_FILE = os.path.join(APP_ROOT, "Weekly Shop Schedule.xlsx")
+FEEDBACK_FILE = os.path.join(APP_ROOT, "repair_feedback.csv")
 
-# Email function
 def send_confirmation_email(to, date, slot, quote):
     user = os.getenv("EMAIL_USER")
     try:
@@ -32,7 +32,6 @@ def send_confirmation_email(to, date, slot, quote):
         st.error(f"Email failed: {e}")
         return False
 
-# Booking slots
 def get_available_slots():
     try:
         df = pd.read_excel(SCHEDULE_FILE)
@@ -42,7 +41,6 @@ def get_available_slots():
         st.error(f"Schedule file error: {e}")
         return pd.DataFrame()
 
-# Chatbot logic
 def ask_auto_buddy(prompt):
     response = client.chat.completions.create(
         model="gpt-4",
@@ -50,7 +48,12 @@ def ask_auto_buddy(prompt):
     )
     return response.choices[0].message.content
 
-# Session state
+def save_feedback(user, date, slot, resolved, comments):
+    with open(FEEDBACK_FILE, "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([user["name"], user["email"], date, slot, resolved, comments])
+
+# Session state init
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "system", "content": (
         "You are Auto Buddy, a friendly and helpful auto repair assistant. "
@@ -64,7 +67,6 @@ if "user_info" not in st.session_state:
 if "vehicle_info" not in st.session_state:
     st.session_state.vehicle_info = {}
 
-# App starts
 st.title("🚘 Auto Buddy")
 st.markdown("Your friendly car diagnosis + repair scheduling assistant.")
 
@@ -78,7 +80,35 @@ if not st.session_state.user_info:
                 st.session_state.user_info = {"name": name, "email": email}
                 st.rerun()
 
-# Step 2: vehicle info
+# Step 2: feedback
+if st.session_state.user_info:
+    st.subheader("🛠️ Was your vehicle issue resolved?")
+    try:
+        df_bookings = pd.read_csv(BOOKING_FILE)
+        matches = df_bookings[
+            (df_bookings["Name"] == st.session_state.user_info["name"])
+        ]
+        if matches.empty:
+            st.info("No prior bookings found.")
+        else:
+            options = matches.apply(lambda r: f"{r['Date']} at {r['Time Slot']}", axis=1)
+            selected = st.selectbox("Choose appointment", options)
+            row = matches.iloc[options.index(selected)]
+            resolved = st.radio("Was the issue fixed?", ["Yes", "No"])
+            comment = st.text_area("Any feedback?")
+            if st.button("Submit Feedback"):
+                save_feedback(
+                    st.session_state.user_info,
+                    row["Date"],
+                    row["Time Slot"],
+                    resolved,
+                    comment
+                )
+                st.success("Thanks for your feedback!")
+    except:
+        st.warning("No booking data available yet.")
+
+# Step 3: vehicle info
 if st.session_state.user_info and not st.session_state.vehicle_info:
     with st.form("vehicle_form"):
         year = st.text_input("Vehicle Year")
@@ -97,7 +127,7 @@ if st.session_state.user_info and not st.session_state.vehicle_info:
                 st.session_state.messages.append({"role": "assistant", "content": reply})
                 st.rerun()
 
-# Step 3: chatbot interaction
+# Step 4: chatbot
 if st.session_state.vehicle_info:
     for msg in st.session_state.messages[1:]:
         st.chat_message(msg["role"]).write(msg["content"])
@@ -111,12 +141,12 @@ if st.session_state.vehicle_info:
         st.rerun()
 
     if not st.session_state.booking_mode:
-        st.subheader("🔧 Would you like to schedule a repair?")
+        st.subheader("🔧 Would you like help scheduling a repair?")
         if st.button("Schedule an Appointment"):
             st.session_state.booking_mode = True
             st.rerun()
 
-# Step 4: booking section
+# Step 5: booking mode
 if st.session_state.booking_mode:
     st.subheader("📅 Book Your Appointment")
     available = get_available_slots()
