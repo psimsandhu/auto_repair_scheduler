@@ -89,28 +89,21 @@ if st.session_state.vehicle_info:
             st.session_state.booking_mode = True
 
 # Booking form
-if st.session_state.booking_mode:
-    st.subheader("📅 Book Your Appointment")
-    available = get_available_slots()
-    if available.empty:
-        st.warning("No slots available.")
-    else:
-        selected = st.selectbox("Choose a slot", available["Day"] + " - " + available["Time Slot"])
-        if st.button("Confirm Booking"):
-            row = available.iloc[available.index[available["Day"] + " - " + available["Time Slot"] == selected][0]]
-            hours = round(random.uniform(1.0, 3.0), 1)
-            rate = 100
-            date_str = f"2025-{['Monday','Tuesday','Wednesday','Thursday','Friday'].index(row['Day'])+6:02d}"
-            with open(BOOKING_FILE, "a", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerow([
-                    st.session_state.user_info["name"],
-                    date_str,
-                    row["Time Slot"],
-                    "Pending",
-                    rate,
-                    hours
-                ])
-            st.success("✅ Booking submitted!")
-            st.info(f"Quote: {hours} hrs × ${rate} = ${hours * rate:.2f}")
-            st.session_state.booking_mode = False
+if st.button("Confirm Booking"):
+    row = available.iloc[available.index[available["Day"] + " - " + available["Time Slot"] == selected][0]]
+    hours = round(random.uniform(1.0, 3.0), 1)
+    rate = 100
+    date_str = f"2025-{['Monday','Tuesday','Wednesday','Thursday','Friday'].index(row['Day'])+9:02d}"
+    with open("bookings.csv", "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            st.session_state.user_info["name"],
+            date_str,
+            row["Time Slot"],
+            "Pending",
+            rate,
+            hours
+        ])
+    st.success("✅ Booking submitted!")
+    st.info(f"Quote: {hours} hrs × ${rate} = ${hours * rate:.2f}")
+    st.session_state.booking_mode = False
