@@ -7,7 +7,9 @@ BOOKING_FILE = "bookings.csv"
 @st.cache_data
 def load_bookings():
     try:
-        return pd.read_csv(BOOKING_FILE)
+        df = pd.read_csv(BOOKING_FILE)
+        st.write("🔍 Bookings loaded:", df)  # Debug line
+        return df
     except FileNotFoundError:
         return pd.DataFrame(columns=[
             "Name", "Date", "Time Slot", "Status", "Labor Rate ($/hr)", "Estimated Hours"
@@ -16,16 +18,13 @@ def load_bookings():
 def save_bookings(df):
     df.to_csv(BOOKING_FILE, index=False)
 
-# Load and show
 df = load_bookings()
 st.title("🔧 Shop Booking Manager")
 
-# Calendar View
 st.subheader("📅 Calendar View")
 
 def to_event(row):
-    start_time = row["Time Slot"].split(" - ")[0]
-    end_time = row["Time Slot"].split(" - ")[1]
+    start_time, end_time = row["Time Slot"].split(" - ")
     return {
         "title": f"{row['Name']} (${row['Estimated Hours']}h)",
         "start": f"{row['Date']}T{start_time}:00",
@@ -36,7 +35,6 @@ def to_event(row):
 events = [to_event(r) for _, r in df.iterrows()]
 calendar(events=events, options={"editable": False, "initialView": "timeGridWeek"})
 
-# Manage pending
 st.subheader("⚙️ Manage Pending Bookings")
 pending_df = df[df["Status"].str.lower() == "pending"]
 
