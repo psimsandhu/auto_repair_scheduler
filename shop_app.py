@@ -1,10 +1,8 @@
 import streamlit as st
 import pandas as pd
-import os
 
 BOOKING_FILE = "bookings.csv"
 
-# Load or initialize bookings
 @st.cache_data
 def load_bookings():
     try:
@@ -15,12 +13,12 @@ def load_bookings():
 def save_bookings(df):
     df.to_csv(BOOKING_FILE, index=False)
 
-# UI
 st.title("🔧 Shop Booking Manager")
-st.write("Manage repair requests and confirm or deny bookings.")
-
 df = load_bookings()
-pending_df = df[df["Status"] == "Pending"]
+
+st.write("📋 All Bookings:", df)  # Debug print
+
+pending_df = df[df["Status"].str.lower() == "pending"]
 
 if pending_df.empty:
     st.info("No pending bookings.")
@@ -41,3 +39,4 @@ else:
             df.at[idx, "Status"] = "Denied"
             save_bookings(df)
             st.error(f"Denied booking for {row['Name']}")
+
