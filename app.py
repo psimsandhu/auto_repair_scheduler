@@ -24,15 +24,20 @@ def lookup_pcode_description(pcode, pdf_path):
     return "No description found for this P-code."
 
 # Call ChatGPT API
+from openai import OpenAI
+
+client = OpenAI()
+
 def call_chatbot(prompt):
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4",
         messages=[
             {"role": "system", "content": "You are an auto repair chatbot that helps users diagnose SAE P-codes, offer DIY repair advice, or schedule a shop visit."},
             {"role": "user", "content": prompt}
         ]
     )
-    return response['choices'][0]['message']['content']
+    return response.choices[0].message.content
+
 
 # Streamlit UI
 st.title("Auto Repair Scheduler")
