@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 import csv
-from datetime import date
 import random
 from openai import OpenAI
 
@@ -11,13 +10,13 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 BOOKING_FILE = "bookings.csv"
 SCHEDULE_FILE = "Weekly Shop Schedule.xlsx"
 
-# Initialize session state
+# Session state init
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "system", "content": (
             "You are Auto Buddy, a friendly and helpful auto repair assistant. "
             "You diagnose SAE P-codes and car issues based on the user's vehicle details. "
-            "You recommend DIY or shop repair, and if shop repair is needed, prompt to schedule it."
+            "You recommend DIY or shop repair, and offer to schedule shop service."
         )}
     ]
 if "booking_mode" not in st.session_state:
@@ -27,6 +26,7 @@ if "user_info" not in st.session_state:
 if "vehicle_info" not in st.session_state:
     st.session_state.vehicle_info = {}
 
+# Load shop schedule
 def get_available_slots():
     try:
         df = pd.read_excel(SCHEDULE_FILE)
@@ -35,6 +35,7 @@ def get_available_slots():
     except:
         return pd.DataFrame()
 
+# Chat with GPT
 def ask_auto_buddy(prompt):
     response = client.chat.completions.create(
         model="gpt-4",
@@ -42,9 +43,11 @@ def ask_auto_buddy(prompt):
     )
     return response.choices[0].message.content
 
+# App UI
 st.title("🚘 Auto Buddy")
-st.markdown("Your friendly car diagnosis + repair scheduling assistant.")
+st.markdown("Friendly car diagnosis + repair scheduling assistant.")
 
+# User input
 if not st.session_state.user_info:
     with st.form("user_info_form"):
         name = st.text_input("Your Name")
@@ -54,6 +57,7 @@ if not st.session_state.user_info:
             st.session_state.user_info = {"name": name, "email": email}
             st.rerun()
 
+# Vehicle info
 if st.session_state.user_info and not st.session_state.vehicle_info:
     with st.form("vehicle_form"):
         year = st.text_input("Vehicle Year")
@@ -70,18 +74,28 @@ if st.session_state.user_info and not st.session_state.vehicle_info:
             with st.spinner("Auto Buddy is analyzing your issue..."):
                 reply = ask_auto_buddy(prompt)
             st.session_state.messages.append({"role": "assistant", "content": reply})
-            st.session_state.last_reply = reply.lower()
             st.rerun()
 
+# Chat + repair decision
 if st.session_state.vehicle_info:
     for msg in st.session_state.messages[1:]:
         st.chat_message(msg["role"]).write(msg["content"])
 
-    if "repair at a shop" in st.session_state.get("last_reply", "") or "schedule a repair" in st.session_state.get("last_reply", ""):
-        st.subheader("🔧 Auto Buddy recommends a shop repair.")
-        if st.button("See Available Appointments"):
-            st.session_state.booking_mode = True
+    user_input = st.chat_input("Ask a follow-up or request a repair...")
+    if user_input:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        with st.spinner("Auto Buddy is thinking..."):
+            reply = ask_auto_buddy(user_input)
+        st.session_state.messages.append({"role": "assistant", "content": reply})
+        st.rerun()
 
+    if not st.session_state.booking_mode:
+        st.subheader("🔧 Would you like help scheduling a repair?")
+        if st.button("Schedule an Appointment"):
+            st.session_state.booking_mode = True
+            st.rerun()
+
+# Booking interface
 if st.session_state.booking_mode:
     st.subheader("📅 Book Your Appointment")
     available = get_available_slots()
