@@ -9,8 +9,7 @@ BOOKING_FILE = os.path.join(APP_ROOT, "bookings.csv")
 @st.cache_data
 def load_bookings():
     try:
-        df = pd.read_csv(BOOKING_FILE)
-        return df
+        return pd.read_csv(BOOKING_FILE)
     except FileNotFoundError:
         return pd.DataFrame(columns=[
             "Name", "Date", "Time Slot", "Status", "Labor Rate ($/hr)", "Estimated Hours"
@@ -23,38 +22,44 @@ st.title("🔧 Shop Booking Manager")
 
 df = load_bookings()
 
-st.subheader("📅 Calendar View")
+st.subheader("📋 All Bookings (Debug View)")
+st.dataframe(df)
 
+st.subheader("📅 Booking Calendar")
+
+# Convert to events with ISO-compliant time
 def to_event(row, idx):
-    start_time, end_time = row["Time Slot"].split(" - ")
-    return {
-        "id": idx,
-        "title": f"{row['Name']} (${row['Estimated Hours']}h)",
-        "start": f"{row['Date']}T{start_time}:00",
-        "end": f"{row['Date']}T{end_time}:00",
-        "color": "green" if row["Status"].lower() == "accepted" else "orange",
-        "extendedProps": {
-            "Name": row["Name"],
-            "Date": row["Date"],
-            "Slot": row["Time Slot"],
-            "Status": row["Status"],
-            "Quote": row["Estimated Hours"] * row["Labor Rate ($/hr)"]
+    try:
+        start_hour, start_min = row["Time Slot"].split(" - ")[0].split(":")
+        end_hour, end_min = row["Time Slot"].split(" - ")[1].split(":")
+        date = pd.to_datetime(row["Date"]).strftime("%Y-%m-%d")
+        return {
+            "id": idx,
+            "title": f"{row['Name']} (${row['Estimated Hours']}h)",
+            "start": f"{date}T{start_hour.zfill(2)}:{start_min.zfill(2)}:00",
+            "end": f"{date}T{end_hour.zfill(2)}:{end_min.zfill(2)}:00",
+            "color": "green" if row["Status"].lower() == "accepted" else "orange",
+            "extendedProps": {
+                "Quote": row["Estimated Hours"] * row["Labor Rate ($/hr)"],
+                "Status": row["Status"]
+            }
         }
-    }
+    except:
+        return None
 
-events = [to_event(row, idx) for idx, row in df.iterrows()]
+events = [to_event(row, idx) for idx, row in df.iterrows() if to_event(row, idx)]
 event_data = calendar(events=events, options={"initialView": "timeGridWeek"})
 
-# Event interaction
 if event_data and "event" in event_data and event_data["event"]:
     e = event_data["event"]
     selected_idx = int(e["id"])
     selected = df.iloc[selected_idx]
-    st.markdown("### 📋 Booking Details")
+    st.markdown("### 📝 Booking Details")
     st.write(f"**Customer**: {selected['Name']}")
-    st.write(f"**Date**: {selected['Date']} | **Time**: {selected['Time Slot']}")
-    st.write(f"**Quote**: {selected['Estimated Hours']} hrs × ${selected['Labor Rate ($/hr)']} = ${selected['Estimated Hours'] * selected['Labor Rate ($/hr)']:.2f}")
+    st.write(f"**Date**: {selected['Date']}")
+    st.write(f"**Time**: {selected['Time Slot']}")
     st.write(f"**Status**: {selected['Status']}")
+    st.write(f"**Quote**: ${selected['Estimated Hours'] * selected['Labor Rate ($/hr)']:.2f}")
 
     if selected["Status"].lower() == "pending":
         col1, col2 = st.columns(2)
