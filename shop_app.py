@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from streamlit_calendar import calendar
+from datetime import datetime
+import json
 
 BOOKING_FILE = "bookings.csv"
 
@@ -8,7 +10,6 @@ BOOKING_FILE = "bookings.csv"
 def load_bookings():
     try:
         df = pd.read_csv(BOOKING_FILE)
-        st.write("🔍 Bookings loaded:", df)  # Debug line
         return df
     except FileNotFoundError:
         return pd.DataFrame(columns=[
@@ -18,44 +19,53 @@ def load_bookings():
 def save_bookings(df):
     df.to_csv(BOOKING_FILE, index=False)
 
-df = load_bookings()
 st.title("🔧 Shop Booking Manager")
 
-st.subheader("📅 Calendar View")
+df = load_bookings()
 
-def to_event(row):
+st.subheader("📅 Booking Calendar")
+
+# Convert to calendar events
+def to_event(row, idx):
     start_time, end_time = row["Time Slot"].split(" - ")
     return {
+        "id": idx,
         "title": f"{row['Name']} (${row['Estimated Hours']}h)",
         "start": f"{row['Date']}T{start_time}:00",
         "end": f"{row['Date']}T{end_time}:00",
-        "color": "green" if row["Status"].lower() == "accepted" else "orange"
+        "color": "green" if row["Status"].lower() == "accepted" else "orange",
+        "extendedProps": {
+            "Name": row["Name"],
+            "Date": row["Date"],
+            "Slot": row["Time Slot"],
+            "Status": row["Status"],
+            "Quote": row["Estimated Hours"] * row["Labor Rate ($/hr)"]
+        }
     }
 
-events = [to_event(r) for _, r in df.iterrows()]
-calendar(events=events, options={"editable": False, "initialView": "timeGridWeek"})
+events = [to_event(r, idx) for idx, r in df.iterrows()]
+event_data = calendar(events=events, options={"initialView": "timeGridWeek"})
 
-st.subheader("⚙️ Manage Pending Bookings")
-pending_df = df[df["Status"].str.lower() == "pending"]
+# Post-interaction
+if event_data and "event" in event_data and event_data["event"]:
+    e = event_data["event"]
+    selected_idx = int(e["id"])
+    selected = df.iloc[selected_idx]
+    st.markdown(f"### 📋 Booking Details")
+    st.write(f"**Customer**: {selected['Name']}")
+    st.write(f"**Date**: {selected['Date']} | **Time**: {selected['Time Slot']}")
+    st.write(f"**Quote**: {selected['Estimated Hours']} hrs × ${selected['Labor Rate ($/hr)']} = ${selected['Estimated Hours'] * selected['Labor Rate ($/hr)']:.2f}")
+    st.write(f"**Status**: {selected['Status']}")
 
-if pending_df.empty:
-    st.info("No pending bookings.")
-else:
-    for idx, row in pending_df.iterrows():
-        st.markdown("---")
-        st.write(f"**Customer**: {row['Name']}")
-        st.write(f"**Date**: {row['Date']} | **Time**: {row['Time Slot']}")
-        quote = row["Estimated Hours"] * row["Labor Rate ($/hr)"]
-        st.write(f"**Quote**: {row['Estimated Hours']} hrs × ${row['Labor Rate ($/hr)']} = **${quote:.2f}**")
-
+    if selected["Status"].lower() == "pending":
         col1, col2 = st.columns(2)
-        if col1.button(f"✅ Accept", key=f"accept_{idx}"):
-            df.at[idx, "Status"] = "Accepted"
+        if col1.button("✅ Accept"):
+            df.at[selected_idx, "Status"] = "Accepted"
             save_bookings(df)
-            st.success(f"✅ Accepted booking for {row['Name']}")
+            st.success("Booking accepted.")
             st.rerun()
-        if col2.button(f"❌ Deny", key=f"deny_{idx}"):
-            df.at[idx, "Status"] = "Denied"
+        if col2.button("❌ Deny"):
+            df.at[selected_idx, "Status"] = "Denied"
             save_bookings(df)
-            st.error(f"❌ Denied booking for {row['Name']}")
+            st.error("Booking denied.")
             st.rerun()
