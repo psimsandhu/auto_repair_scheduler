@@ -27,15 +27,14 @@ if "user_info" not in st.session_state:
 if "vehicle_info" not in st.session_state:
     st.session_state.vehicle_info = {}
 
-# Load shop availability
 def get_available_slots():
     try:
         df = pd.read_excel(SCHEDULE_FILE)
+        df["slot_label"] = df["Date"].astype(str) + " - " + df["Day"] + " - " + df["Time Slot"]
         return df[df["Status"].str.lower() == "available"]
     except:
         return pd.DataFrame()
 
-# Ask OpenAI
 def ask_auto_buddy(prompt):
     response = client.chat.completions.create(
         model="gpt-4",
@@ -43,11 +42,9 @@ def ask_auto_buddy(prompt):
     )
     return response.choices[0].message.content
 
-# App UI
 st.title("🚘 Auto Buddy")
-st.markdown("Friendly car diagnosis + repair scheduling assistant.")
+st.markdown("Your friendly car diagnosis + repair scheduling assistant.")
 
-# Get user info
 if not st.session_state.user_info:
     with st.form("user_info_form"):
         name = st.text_input("Your Name")
@@ -57,7 +54,6 @@ if not st.session_state.user_info:
             st.session_state.user_info = {"name": name, "email": email}
             st.rerun()
 
-# Get vehicle info
 if st.session_state.user_info and not st.session_state.vehicle_info:
     with st.form("vehicle_form"):
         year = st.text_input("Vehicle Year")
@@ -77,33 +73,36 @@ if st.session_state.user_info and not st.session_state.vehicle_info:
             st.session_state.last_reply = reply.lower()
             st.rerun()
 
-# Chat + results
 if st.session_state.vehicle_info:
     for msg in st.session_state.messages[1:]:
         st.chat_message(msg["role"]).write(msg["content"])
 
-    # Check if shop repair is advised
     if "repair at a shop" in st.session_state.get("last_reply", "") or "schedule a repair" in st.session_state.get("last_reply", ""):
         st.subheader("🔧 Auto Buddy recommends a shop repair.")
         if st.button("See Available Appointments"):
             st.session_state.booking_mode = True
 
-# Booking form
-if st.button("Confirm Booking"):
-    row = available.iloc[available.index[available["Day"] + " - " + available["Time Slot"] == selected][0]]
-    hours = round(random.uniform(1.0, 3.0), 1)
-    rate = 100
-    date_str = f"2025-{['Monday','Tuesday','Wednesday','Thursday','Friday'].index(row['Day'])+9:02d}"
-    with open("bookings.csv", "a", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            st.session_state.user_info["name"],
-            date_str,
-            row["Time Slot"],
-            "Pending",
-            rate,
-            hours
-        ])
-    st.success("✅ Booking submitted!")
-    st.info(f"Quote: {hours} hrs × ${rate} = ${hours * rate:.2f}")
-    st.session_state.booking_mode = False
+if st.session_state.booking_mode:
+    st.subheader("📅 Book Your Appointment")
+    available = get_available_slots()
+    if available.empty:
+        st.warning("No slots available.")
+    else:
+        selected = st.selectbox("Choose a slot", available["slot_label"])
+        if st.button("Confirm Booking"):
+            row = available[available["slot_label"] == selected].iloc[0]
+            hours = round(random.uniform(1.0, 3.0), 1)
+            rate = 100
+            with open(BOOKING_FILE, "a", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    st.session_state.user_info["name"],
+                    row["Date"],
+                    row["Time Slot"],
+                    "Pending",
+                    rate,
+                    hours
+                ])
+            st.success("✅ Booking submitted!")
+            st.info(f"Quote: {hours} hrs × ${rate} = ${hours * rate:.2f}")
+            st.session_state.booking_mode = False
