@@ -9,41 +9,37 @@ def load_bookings():
     try:
         return pd.read_csv(BOOKING_FILE)
     except FileNotFoundError:
-        return pd.DataFrame(columns=["Name", "Date", "Time Slot", "Status", "Labor Rate ($/hr)", "Estimated Hours"])
+        return pd.DataFrame(columns=[
+            "Name", "Date", "Time Slot", "Status", "Labor Rate ($/hr)", "Estimated Hours"
+        ])
 
 def save_bookings(df):
     df.to_csv(BOOKING_FILE, index=False)
 
-# Load bookings
+# Load and show
 df = load_bookings()
-
 st.title("🔧 Shop Booking Manager")
 
-# Raw data view
-with st.expander("📋 Show All Bookings"):
-    st.dataframe(df)
+# Calendar View
+st.subheader("📅 Calendar View")
 
-# Convert to calendar events
 def to_event(row):
     start_time = row["Time Slot"].split(" - ")[0]
     end_time = row["Time Slot"].split(" - ")[1]
-    start = f"{row['Date']}T{start_time}:00"
-    end = f"{row['Date']}T{end_time}:00"
     return {
         "title": f"{row['Name']} (${row['Estimated Hours']}h)",
-        "start": start,
-        "end": end,
+        "start": f"{row['Date']}T{start_time}:00",
+        "end": f"{row['Date']}T{end_time}:00",
         "color": "green" if row["Status"].lower() == "accepted" else "orange"
     }
 
-st.subheader("📅 Calendar View")
 events = [to_event(r) for _, r in df.iterrows()]
 calendar(events=events, options={"editable": False, "initialView": "timeGridWeek"})
 
-# Manage pending bookings
+# Manage pending
+st.subheader("⚙️ Manage Pending Bookings")
 pending_df = df[df["Status"].str.lower() == "pending"]
 
-st.subheader("⚙️ Manage Pending Bookings")
 if pending_df.empty:
     st.info("No pending bookings.")
 else:
