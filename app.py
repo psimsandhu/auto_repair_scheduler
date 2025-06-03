@@ -4,11 +4,32 @@ import os
 import csv
 import random
 from openai import OpenAI
+import yagmail
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 BOOKING_FILE = "bookings.csv"
 SCHEDULE_FILE = "Weekly Shop Schedule.xlsx"
+
+# Email function
+def send_confirmation_email(to, date, slot, quote):
+    user = os.getenv("EMAIL_USER")
+    try:
+        yag = yagmail.SMTP(user)
+        subject = "Auto Buddy Booking Confirmation"
+        body = f"""
+        Hello!
+
+        Your repair appointment is confirmed for {date} at {slot}.
+        Estimated quote: ${quote:.2f}
+
+        Thank you for using Auto Buddy!
+        """
+        yag.send(to=to, subject=subject, contents=body)
+        return True
+    except Exception as e:
+        st.error(f"Email failed: {e}")
+        return False
 
 # Session state init
 if "messages" not in st.session_state:
@@ -26,7 +47,6 @@ if "user_info" not in st.session_state:
 if "vehicle_info" not in st.session_state:
     st.session_state.vehicle_info = {}
 
-# Load shop schedule
 def get_available_slots():
     try:
         df = pd.read_excel(SCHEDULE_FILE)
@@ -35,7 +55,6 @@ def get_available_slots():
     except:
         return pd.DataFrame()
 
-# Chat with GPT
 def ask_auto_buddy(prompt):
     response = client.chat.completions.create(
         model="gpt-4",
@@ -43,11 +62,10 @@ def ask_auto_buddy(prompt):
     )
     return response.choices[0].message.content
 
-# App UI
 st.title("🚘 Auto Buddy")
 st.markdown("Friendly car diagnosis + repair scheduling assistant.")
 
-# User input
+# User info
 if not st.session_state.user_info:
     with st.form("user_info_form"):
         name = st.text_input("Your Name")
@@ -76,7 +94,7 @@ if st.session_state.user_info and not st.session_state.vehicle_info:
             st.session_state.messages.append({"role": "assistant", "content": reply})
             st.rerun()
 
-# Chat + repair decision
+# Chat loop
 if st.session_state.vehicle_info:
     for msg in st.session_state.messages[1:]:
         st.chat_message(msg["role"]).write(msg["content"])
@@ -95,7 +113,7 @@ if st.session_state.vehicle_info:
             st.session_state.booking_mode = True
             st.rerun()
 
-# Booking interface
+# Booking mode
 if st.session_state.booking_mode:
     st.subheader("📅 Book Your Appointment")
     available = get_available_slots()
@@ -119,4 +137,10 @@ if st.session_state.booking_mode:
                 ])
             st.success("✅ Booking submitted!")
             st.info(f"Quote: {hours} hrs × ${rate} = ${hours * rate:.2f}")
+            send_confirmation_email(
+                st.session_state.user_info["email"],
+                row["Date"],
+                row["Time Slot"],
+                hours * rate
+            )
             st.session_state.booking_mode = False
