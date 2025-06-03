@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
+import os
 from streamlit_calendar import calendar
-from datetime import datetime
-import json
 
-BOOKING_FILE = "bookings.csv"
+APP_ROOT = os.path.dirname(__file__)
+BOOKING_FILE = os.path.join(APP_ROOT, "bookings.csv")
 
 @st.cache_data
 def load_bookings():
@@ -23,9 +23,8 @@ st.title("🔧 Shop Booking Manager")
 
 df = load_bookings()
 
-st.subheader("📅 Booking Calendar")
+st.subheader("📅 Calendar View")
 
-# Convert to calendar events
 def to_event(row, idx):
     start_time, end_time = row["Time Slot"].split(" - ")
     return {
@@ -43,15 +42,15 @@ def to_event(row, idx):
         }
     }
 
-events = [to_event(r, idx) for idx, r in df.iterrows()]
+events = [to_event(row, idx) for idx, row in df.iterrows()]
 event_data = calendar(events=events, options={"initialView": "timeGridWeek"})
 
-# Post-interaction
+# Event interaction
 if event_data and "event" in event_data and event_data["event"]:
     e = event_data["event"]
     selected_idx = int(e["id"])
     selected = df.iloc[selected_idx]
-    st.markdown(f"### 📋 Booking Details")
+    st.markdown("### 📋 Booking Details")
     st.write(f"**Customer**: {selected['Name']}")
     st.write(f"**Date**: {selected['Date']} | **Time**: {selected['Time Slot']}")
     st.write(f"**Quote**: {selected['Estimated Hours']} hrs × ${selected['Labor Rate ($/hr)']} = ${selected['Estimated Hours'] * selected['Labor Rate ($/hr)']:.2f}")
